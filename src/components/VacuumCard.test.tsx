@@ -207,7 +207,7 @@ describe('vacuum card flows', () => {
     await userEvent.click(screen.getByRole('button', { name: /Empty/ }));
     await userEvent.click(screen.getByRole('button', { name: /Wash/ }));
     await userEvent.click(screen.getByRole('button', { name: /Dry/ }));
-    await userEvent.click(screen.getByRole('button', { name: /Drain onboard water tank/ }));
+    await userEvent.click(screen.getByRole('button', { name: /Drain remaining water/ }));
     expect(window.confirm).toHaveBeenCalledTimes(4);
     expect(hass.callService).not.toHaveBeenCalled();
     vi.restoreAllMocks();

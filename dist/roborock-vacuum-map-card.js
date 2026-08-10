@@ -14855,12 +14855,13 @@ const zw = {
   dryDuration: "Duration",
   safetyMaintenance: "Safety & maintenance",
   childLock: "Dock child lock",
-  drainWaterTank: "Drain onboard water tank",
-  drainWarning: "This runs the dock pump and drains the robot water tank.",
+  drainWaterTank: "Drain remaining water",
+  drainWarning: "Transport maintenance · remove the roller mop first.",
   confirmEmpty: "Start dock emptying? This will make noise.",
   confirmWash: "Start washing the mop? This will run the dock pump.",
   confirmDry: "Start drying the mop? This will run the dock fan.",
-  confirmDrain: "Drain the onboard water tank now? This will run the dock pump.",
+  confirmDrain: "Before starting: keep the robot docked and charging, install the station dirty-water tank and cleaning tray, and remove the roller mop. Emptying takes 5–10 minutes; do not move the robot or dock. Start now?",
+  drainRejected: "Drain rejected. Keep the robot docked and charging, install the station dirty-water tank and cleaning tray, and remove the roller mop before retrying.",
   settingSaved: "Dock setting saved",
   dockActionSent: "Dock command sent",
   active: "Active",
@@ -14954,12 +14955,13 @@ const zw = {
   dryDuration: "Duur",
   safetyMaintenance: "Veiligheid en onderhoud",
   childLock: "Dock kinderslot",
-  drainWaterTank: "Watertank in robot legen",
-  drainWarning: "Dit activeert de dockpomp en leegt de watertank van de robot.",
+  drainWaterTank: "Resterend water legen",
+  drainWarning: "Onderhoud voor transport · verwijder eerst de dweilrol.",
   confirmEmpty: "Dock legen starten? Dit maakt geluid.",
   confirmWash: "Dweil wassen starten? Dit activeert de dockpomp.",
   confirmDry: "Dweil drogen starten? Dit activeert de dockventilator.",
-  confirmDrain: "Watertank in de robot nu legen? Dit activeert de dockpomp.",
+  confirmDrain: "Voor je start: laat de robot docked en opladen, plaats de vuilwatertank en reinigingsbak correct in het station en verwijder de dweilrol. Legen duurt 5–10 minuten; verplaats de robot of het dock niet. Nu starten?",
+  drainRejected: "Legen geweigerd. Laat de robot docked en opladen, plaats de vuilwatertank en reinigingsbak correct en verwijder de dweilrol voordat je het opnieuw probeert.",
   settingSaved: "Dockinstelling opgeslagen",
   dockActionSent: "Dockopdracht verzonden",
   active: "Actief",
@@ -16901,7 +16903,7 @@ function cx({ hass: n, config: i }) {
       try {
         await ec(r.current, i, G, fe), $(Q(s, "dockActionSent"));
       } catch (se) {
-        const on = se instanceof An ? `${se.operation}: ${se.message}` : String(se);
+        const on = G === "drain" ? Q(s, "drainRejected") : se instanceof An ? `${se.operation}: ${se.message}` : String(se);
         $(on);
       } finally {
         V(void 0);

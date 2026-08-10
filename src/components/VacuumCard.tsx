@@ -415,7 +415,11 @@ export function VacuumCard({ hass, config }: VacuumCardProps) {
       await executeDockAction(hassRef.current, config, action, active);
       setToast(t(language, 'dockActionSent'));
     } catch (error) {
-      const message = error instanceof DockExecutionError ? `${error.operation}: ${error.message}` : String(error);
+      const message = action === 'drain'
+        ? t(language, 'drainRejected')
+        : error instanceof DockExecutionError
+          ? `${error.operation}: ${error.message}`
+          : String(error);
       setToast(message);
     } finally {
       setDockPending(undefined);
