@@ -62,6 +62,7 @@ function missingOption(
   }
   if (preset.cleaning_type === 'vacuum_then_mop') {
     if (floor?.vacuum_then_mop_routine) return undefined;
+    if (floor?.assisted_carry && config.entities?.assisted_carry_start_script) return undefined;
     if (!config.entities?.vacuum_then_mop_script) return 'Vac followed by Mop script';
     if (!capabilities.cleaningModes.includes('vacuum') || !capabilities.cleaningModes.includes('mop')) {
       return 'cleaning modes “vacuum” and “mop”';

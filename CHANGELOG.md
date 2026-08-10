@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.6 — 2026-08-10
+
+- Expose Vac followed by Mop on assisted isolated maps without a native Roborock routine by using the shared no-dock two-phase start script.
+
 ## 0.6.5 — 2026-08-10
 
 - Support multiple isolated maps with assisted carry while retaining one durable, mutually exclusive workflow.

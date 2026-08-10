@@ -15057,7 +15057,7 @@ function Ew(n, i, r, u) {
   if (r.cleaning_type === "vacuum" && !s)
     return "cleaning mode “vacuum”";
   if (r.cleaning_type === "vacuum_then_mop") {
-    if (u?.vacuum_then_mop_routine) return;
+    if (u?.vacuum_then_mop_routine || u?.assisted_carry && n.entities?.assisted_carry_start_script) return;
     if (!n.entities?.vacuum_then_mop_script) return "Vac followed by Mop script";
     if (!i.cleaningModes.includes("vacuum") || !i.cleaningModes.includes("mop"))
       return "cleaning modes “vacuum” and “mop”";

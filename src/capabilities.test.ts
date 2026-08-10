@@ -47,4 +47,14 @@ describe('capability detection and presets', () => {
     const presets = getAvailablePresets(config, detectCapabilities(createHass(), config));
     expect(presets.find(({ preset }) => preset.id === 'vacuum_only')?.available).toBe(true);
   });
+
+  it('uses the assisted start script for Vac followed by Mop on an isolated map without a native routine', () => {
+    const floor = { ...configFixture.floors[1], vacuum_then_mop_routine: undefined };
+    const config = {
+      ...configFixture,
+      entities: { ...configFixture.entities, vacuum_then_mop_script: undefined },
+    };
+    const presets = getAvailablePresets(config, detectCapabilities(createHass(), config), floor);
+    expect(presets.find(({ preset }) => preset.id === 'vacuum_then_mop')?.available).toBe(true);
+  });
 });
