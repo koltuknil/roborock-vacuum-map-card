@@ -193,7 +193,7 @@ default_preset: vacuum_only
 | `floor.map_entity` | Yes | Calibrated Roborock Custom Map image |
 | `floor.vacuum_then_mop_routine` | Recommended | Native Roborock routine button for the whole floor; the routine owns rooms, suction, water, passes, and route |
 | `floor.rooms` | Yes | Segment-to-area mappings and floor-clean membership |
-| `floor.assisted_carry` | No | Makes this the single floor that uses the guided no-dock carry workflow |
+| `floor.assisted_carry` | No | Enables the guided no-dock carry workflow for this floor; multiple isolated maps can share the durable workflow helpers |
 | `presets` | No | Structured additional presets with optional `cleaning_count: 1` or `2`; arbitrary service YAML is intentionally unsupported |
 | `default_preset` | No | Built-in or configured preset ID |
 | `vacuum_mode_fallback` | No | `set_clean_motor_mode` enables true Vacuum mode on HA 2026.7 and older with one atomic Roborock command |

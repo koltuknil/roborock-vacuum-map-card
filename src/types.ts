@@ -115,6 +115,11 @@ export interface FloorConfig {
 
 export interface AssistedCarryJob {
   segment_ids: number[];
+  floor_id?: string;
+  map_select_option?: string;
+  area_ids?: string[];
+  whole_floor?: boolean;
+  vacuum_then_mop_routine?: string;
   strategy: CleaningStrategy;
   cleaning_type: CleaningType;
   fan_speed?: string;

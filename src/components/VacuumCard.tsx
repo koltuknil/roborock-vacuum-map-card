@@ -115,12 +115,12 @@ export function VacuumCard({ hass, config }: VacuumCardProps) {
     draftFromPreset(defaultPreset ?? { id: 'custom', name: 'Custom', strategy: 'custom', cleaning_type: 'vacuum' }),
   );
   const vacuum = hass.states[config.entity];
-  const carryFloor = assistedFloor(config);
   const carryStage = assistedStage(hass, config);
   const carryJobState = config.entities?.assisted_carry_job
     ? hass.states[config.entities.assisted_carry_job]?.state
     : undefined;
   const carryJob = useMemo(() => decodeAssistedJob(carryJobState), [carryJobState]);
+  const carryFloor = assistedFloor(config, carryJob);
   const assistedActive = isAssistedCarryActive(carryStage);
   const selectedMap = config.entities?.map_select
     ? hass.states[config.entities.map_select]?.state
@@ -263,7 +263,7 @@ export function VacuumCard({ hass, config }: VacuumCardProps) {
     submittingRef.current = true;
     setAssistedPending(true);
     try {
-      const job = createAssistedJob([...selected], draft);
+      const job = createAssistedJob(floor, [...selected], draft);
       await prepareAssistedCarry(hassRef.current, config, job);
       setSheetOpen(false);
       setToast(t(language, 'preparingUpstairs'));

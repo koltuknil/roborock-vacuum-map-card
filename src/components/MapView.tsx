@@ -94,6 +94,7 @@ export function MapView({ hass, floor, language, selected, launched, active, dis
             <img
               src={(() => {
                 const base = hass.hassUrl(imagePath!);
+                if (base.startsWith('data:')) return base;
                 const sep = base.includes('?') ? '&' : '?';
                 const version = entity?.last_updated ?? entity?.state ?? '';
                 return `${base}${sep}v=${encodeURIComponent(version)}${active ? `&r=${refreshTick}` : ''}`;

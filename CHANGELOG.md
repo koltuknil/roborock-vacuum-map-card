@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.5 — 2026-08-10
+
+- Support multiple isolated maps with assisted carry while retaining one durable, mutually exclusive workflow.
+- Persist the exact floor, Roborock map option, mapped areas, whole-map intent, and optional native routine in each carry job.
+- Restore the correct map tab after dashboard reloads and use whole-map cleaning for single-room isolated maps.
+- Keep legacy upstairs payloads compatible with the existing `Map 1` flow.
+
 ## 0.6.2 — 2026-08-10
 
 - Treat completed and failed assisted-carry workflows as terminal so floor switching is unlocked again.

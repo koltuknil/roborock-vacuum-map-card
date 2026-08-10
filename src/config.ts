@@ -95,10 +95,7 @@ export const cardConfigSchema = z
       ctx.addIssue({ code: 'custom', path: ['entities', 'map_select'], message: 'Multiple floors require a map-select entity' });
     }
     const assistedFloors = config.floors.filter((floor) => floor.assisted_carry);
-    if (assistedFloors.length > 1) {
-      ctx.addIssue({ code: 'custom', path: ['floors'], message: 'Only one floor can use assisted carry' });
-    }
-    if (assistedFloors.length === 1) {
+    if (assistedFloors.length > 0) {
       const required = [
         'assisted_carry_stage',
         'assisted_carry_job',

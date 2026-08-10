@@ -33,4 +33,16 @@ describe('card config', () => {
     };
     expect(validateConfig(invalid)).toContain('entities.assisted_carry_start_script: Assisted carry requires this entity');
   });
+
+  it('allows multiple isolated floors to share one durable assisted-carry workflow', () => {
+    const extraFloor = {
+      id: 'bathroom',
+      name: 'Bathroom',
+      map_entity: 'image.bathroom',
+      map_select_option: 'Bathroom',
+      assisted_carry: true,
+      rooms: [{ segment_id: 1, area_id: 'bathroom', name: 'Bathroom' }],
+    };
+    expect(validateConfig({ ...configFixture, floors: [...configFixture.floors, extraFloor] })).toEqual([]);
+  });
 });

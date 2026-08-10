@@ -94,7 +94,9 @@ describe('vacuum card flows', () => {
       target: { entity_id: 'script.assisted_carry_prepare' },
     }));
     expect(calls[0]).toMatchObject({ domain: 'input_text', service: 'set_value', target: { entity_id: 'input_text.assisted_carry_job' } });
-    expect(JSON.parse(String(calls[0].data?.value))).toMatchObject({ g: 'custom', t: 'vacuum_and_mop' });
+    expect(JSON.parse(String(calls[0].data?.value))).toMatchObject({
+      d: 'upstairs', o: 'Upstairs', a: ['office'], g: 'custom', t: 'vacuum_and_mop',
+    });
     expect(calls[1]).toMatchObject({ domain: 'input_select', service: 'select_option', data: { option: 'preparing' } });
   });
 

@@ -89,7 +89,8 @@ test('opens dock controls, persists settings, and guards physical actions', asyn
   await expect(dialog).toContainText('Water temperature');
   await expect(dialog).toContainText('Auto-empty');
   await expect(dialog).toContainText('Auto-drying');
-  await expect(dialog).toContainText('Drain onboard water tank');
+  await expect(dialog).toContainText('Drain onboard dirty-water tank');
+  await expect(dialog).toContainText('Unavailable through the current Home Assistant Roborock integration');
   await page.getByRole('combobox', { name: 'Washing mode' }).selectOption('deep');
   const settingsCalls = await page.evaluate(() => window.__serviceCalls);
   expect(settingsCalls.some((call) => call.data?.command === 'set_wash_towel_mode')).toBe(true);

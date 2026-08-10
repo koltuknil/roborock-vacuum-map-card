@@ -30,5 +30,5 @@ test('production card requests content-driven section height', async ({ page }) 
     return card.getGridOptions();
   });
 
-  expect(gridOptions).toEqual({ columns: 12, rows: 'auto', min_rows: 8 });
+  expect(gridOptions).toEqual({ columns: 12, rows: 'auto', min_rows: 10 });
 });

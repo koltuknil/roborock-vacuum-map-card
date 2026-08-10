@@ -29,8 +29,12 @@ export class AssistedCarryError extends Error {
   }
 }
 
-export function assistedFloor(config: RoborockVacuumMapCardConfig): FloorConfig | undefined {
-  return config.floors.find((floor) => floor.assisted_carry);
+export function assistedFloor(
+  config: RoborockVacuumMapCardConfig,
+  job?: AssistedCarryJob,
+): FloorConfig | undefined {
+  return config.floors.find((floor) => floor.assisted_carry && floor.id === job?.floor_id)
+    ?? config.floors.find((floor) => floor.assisted_carry);
 }
 
 export function assistedStage(hass: HomeAssistant, config: RoborockVacuumMapCardConfig): AssistedCarryStage {
@@ -43,7 +47,7 @@ export function isAssistedCarryActive(stage: AssistedCarryStage): boolean {
   return !['idle', 'complete', 'error'].includes(stage);
 }
 
-export function createAssistedJob(segmentIds: number[], draft: JobDraft): AssistedCarryJob {
+export function createAssistedJob(floor: FloorConfig, segmentIds: number[], draft: JobDraft): AssistedCarryJob {
   const nativeRoutine = draft.cleaning_type === 'vacuum_then_mop';
   if (draft.strategy !== 'smartplan' && !nativeRoutine && !draft.fan_speed) {
     throw new AssistedCarryError('prepare', 'Suction is required');
@@ -51,8 +55,19 @@ export function createAssistedJob(segmentIds: number[], draft: JobDraft): Assist
   if (draft.strategy !== 'smartplan' && !nativeRoutine && draft.cleaning_type !== 'vacuum' && (!draft.mop_mode || !draft.mop_intensity)) {
     throw new AssistedCarryError('prepare', 'Water flow and route are required');
   }
+  const uniqueSegmentIds = [...new Set(segmentIds)];
+  const selectedRooms = floor.rooms.filter((room) => uniqueSegmentIds.includes(room.segment_id));
+  const includedSegments = floor.rooms
+    .filter((room) => room.include_in_floor_clean !== false && room.area_id)
+    .map((room) => room.segment_id);
   return {
-    segment_ids: [...new Set(segmentIds)],
+    segment_ids: uniqueSegmentIds,
+    floor_id: floor.id,
+    map_select_option: floor.map_select_option,
+    area_ids: selectedRooms.map((room) => room.area_id).filter((areaId): areaId is string => Boolean(areaId)),
+    whole_floor: uniqueSegmentIds.length === includedSegments.length
+      && includedSegments.every((segmentId) => uniqueSegmentIds.includes(segmentId)),
+    vacuum_then_mop_routine: floor.vacuum_then_mop_routine,
     strategy: draft.strategy,
     cleaning_type: draft.cleaning_type,
     fan_speed: draft.strategy === 'smartplan' || nativeRoutine ? undefined : draft.fan_speed,
@@ -65,6 +80,11 @@ export function createAssistedJob(segmentIds: number[], draft: JobDraft): Assist
 export function encodeAssistedJob(job: AssistedCarryJob): string {
   return JSON.stringify({
     s: job.segment_ids,
+    d: job.floor_id,
+    o: job.map_select_option,
+    a: job.area_ids,
+    e: job.whole_floor ? 1 : undefined,
+    r: job.vacuum_then_mop_routine,
     g: job.strategy,
     t: job.cleaning_type,
     f: job.fan_speed,
@@ -92,6 +112,11 @@ export function decodeAssistedJob(value: string | undefined): AssistedCarryJob |
     if (strategy === 'custom' && !nativeRoutine && cleaningType !== 'vacuum' && (!mopMode || !mopIntensity)) return undefined;
     return {
       segment_ids: raw.s as number[],
+      floor_id: typeof raw.d === 'string' ? raw.d : undefined,
+      map_select_option: typeof raw.o === 'string' ? raw.o : undefined,
+      area_ids: Array.isArray(raw.a) && raw.a.every((item) => typeof item === 'string') ? raw.a as string[] : undefined,
+      whole_floor: raw.e === 1,
+      vacuum_then_mop_routine: typeof raw.r === 'string' ? raw.r : undefined,
       strategy: strategy as AssistedCarryJob['strategy'],
       cleaning_type: cleaningType as AssistedCarryJob['cleaning_type'],
       fan_speed: fanSpeed,
