@@ -219,7 +219,7 @@ export function DockSheet({
           <section className="dock-settings-group">
             <h3><Lock />{t(language, 'safetyMaintenance')}</h3>
             {childLockEntity && <SettingToggle label={t(language, 'childLock')} checked={childLock} disabled={disabled} onChange={onChildLock} />}
-            <button type="button" className="drain-button" disabled={disabled} onClick={() => onAction('drain', false)}>
+            <button type="button" className="drain-button" disabled>
               <Droplets />
               <span><strong>{t(language, 'drainWaterTank')}</strong><small>{t(language, 'drainWarning')}</small></span>
             </button>

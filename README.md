@@ -13,7 +13,7 @@ A Roborock-native Home Assistant Dashboard card for selecting multiple rooms and
 - App-facing suction, water-flow, cleaning-count, and route controls; internal Roborock modes are filtered out
 - Live capability detection for fan speeds, mop routes, mop intensity, transport controls, and floor options
 - Dock-aware mop washing/drying status with formatted drying time remaining
-- App-style dock panel for Empty, Wash, Dry, wash frequency/mode/temperature, auto-empty, empty mode, auto-drying, drying duration, child lock, and guided transport-maintenance water drain
+- App-style dock panel for Empty, Wash, Dry, wash frequency/mode/temperature, auto-empty, empty mode, auto-drying, drying duration, and child lock
 - Confirmation gates before every noisy dock start/drain action, with persistent HA helper-backed setting state
 - Atomic SmartPlan control of suction, water, and route, plus native one-pass/two-pass cleaning
 - Draft-only settings until Start is pressed; service failures abort before cleaning and retain the draft
@@ -221,6 +221,8 @@ Assisted carry is designed for a saved floor that has no dock and exposes the sa
 Pause, resume, stop, and dock use `vacuum.pause`, `vacuum.start`, `vacuum.stop`, and `vacuum.return_to_base`. `vacuum.start` is exposed only as Resume while paused. Stop and Dock also cancel the configured Vac followed by Mop script and any active assisted upstairs start script before controlling the vacuum.
 
 Dock settings use `vacuum.send_command` with the device-native Roborock payload and update the configured HA helper only after the device accepts the command. This avoids displaying a successful value after a rejected setting. The helpers are optional; without them, the panel uses the documented defaults for its initial display. Empty, Wash, Dry, and Drain are deliberately separate from settings and always require confirmation before starting. The dryer setting command cannot start the dryer; the guarded Dry action uses the distinct dryer-status command.
+
+The onboard dirty-water drain is shown as unavailable because the current Python Roborock transport rewrites the command's required empty-object payload as an empty list. Use the Roborock app for this maintenance action until the upstream transport preserves `{}`.
 
 ## Troubleshooting
 
