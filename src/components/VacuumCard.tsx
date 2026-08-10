@@ -7,6 +7,7 @@ import {
   createAssistedJob,
   decodeAssistedJob,
   finishAssistedCarry,
+  isAssistedCarryActive,
   prepareAssistedCarry,
   resetAssistedCarry,
   setAssistedStage,
@@ -120,7 +121,10 @@ export function VacuumCard({ hass, config }: VacuumCardProps) {
     ? hass.states[config.entities.assisted_carry_job]?.state
     : undefined;
   const carryJob = useMemo(() => decodeAssistedJob(carryJobState), [carryJobState]);
-  const assistedActive = carryStage !== 'idle';
+  const assistedActive = isAssistedCarryActive(carryStage);
+  const selectedMap = config.entities?.map_select
+    ? hass.states[config.entities.map_select]?.state
+    : undefined;
 
   useEffect(() => {
     hassRef.current = hass;
@@ -142,6 +146,16 @@ export function VacuumCard({ hass, config }: VacuumCardProps) {
       cleaning_count: carryJob.cleaning_count,
     });
   }, [assistedActive, carryFloor, carryJob]);
+
+  useEffect(() => {
+    if (assistedActive || !selectedMap) return;
+    const selectedFloor = config.floors.find((item) => item.map_select_option === selectedMap);
+    if (!selectedFloor) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setFloorId(selectedFloor.id);
+    setSelected(new Set());
+    setSheetOpen(false);
+  }, [assistedActive, config.floors, selectedMap]);
 
   const detailedStatus = config.entities?.status ? hass.states[config.entities.status]?.state : undefined;
   const washing = ['washing_the_mop', 'washing_the_mop_2'].includes(detailedStatus ?? '');

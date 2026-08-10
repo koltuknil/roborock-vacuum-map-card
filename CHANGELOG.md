@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.2 — 2026-08-10
+
+- Treat completed and failed assisted-carry workflows as terminal so floor switching is unlocked again.
+- Re-synchronize the displayed floor with Home Assistant's selected-map entity when an assisted upstairs job ends.
+- Add regression coverage for returning from a completed upstairs job to the downstairs dashboard map.
+
 ## 0.6.1 — 2026-08-04
 
 - Start Vac & Mop jobs after Home Assistant accepts the Roborock cleaning-mode command, even when its delayed derived selector remains `unknown`.

@@ -39,6 +39,10 @@ export function assistedStage(hass: HomeAssistant, config: RoborockVacuumMapCard
   return state && STAGES.has(state as AssistedCarryStage) ? state as AssistedCarryStage : 'idle';
 }
 
+export function isAssistedCarryActive(stage: AssistedCarryStage): boolean {
+  return !['idle', 'complete', 'error'].includes(stage);
+}
+
 export function createAssistedJob(segmentIds: number[], draft: JobDraft): AssistedCarryJob {
   const nativeRoutine = draft.cleaning_type === 'vacuum_then_mop';
   if (draft.strategy !== 'smartplan' && !nativeRoutine && !draft.fan_speed) {

@@ -114,6 +114,30 @@ describe('vacuum card flows', () => {
     }));
   });
 
+  it('returns to the selected downstairs map and unlocks floor tabs after assisted carry completes', async () => {
+    const hass = createHass();
+    hass.states['select.map'].state = 'Upstairs';
+    hass.states['input_select.assisted_carry_stage'].state = 'cleaning_upstairs';
+    hass.states['input_text.assisted_carry_job'].state = '{"s":[1,3],"g":"custom","t":"vacuum","f":"balanced","c":1}';
+    const { rerender } = render(<VacuumCard hass={hass} config={configFixture} />);
+
+    expect(await screen.findByRole('tab', { name: 'Upstairs' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: 'Downstairs' })).toBeDisabled();
+
+    const completedHass = {
+      ...hass,
+      states: {
+        ...hass.states,
+        'select.map': { ...hass.states['select.map'], state: 'Downstairs' },
+        'input_select.assisted_carry_stage': { ...hass.states['input_select.assisted_carry_stage'], state: 'complete' },
+      },
+    };
+    rerender(<VacuumCard hass={completedHass} config={configFixture} />);
+
+    await waitFor(() => expect(screen.getByRole('tab', { name: 'Downstairs' })).toHaveAttribute('aria-selected', 'true'));
+    expect(screen.getByRole('tab', { name: 'Upstairs' })).not.toBeDisabled();
+  });
+
   it('prevents duplicate starts while the first submission is pending', async () => {
     const hass = createHass();
     let release!: () => void;
