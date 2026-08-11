@@ -75,7 +75,7 @@ svg { width: 20px; height: 20px; stroke-width: 2; }
   svg { width: 16px; height: 16px; color: var(--rvm-accent); }
 }
 
-.floor-tabs, .segmented {
+.floor-tabs, .segmented, .selection-mode-tabs {
   display: grid;
   grid-auto-flow: column;
   grid-auto-columns: 1fr;
@@ -97,6 +97,8 @@ svg { width: 20px; height: 20px; stroke-width: 2; }
   button.active { background: var(--rvm-surface); color: var(--rvm-accent); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1); }
 }
 
+.selection-mode-tabs { margin-bottom: 10px; }
+
 .map-shell {
   position: relative;
   height: clamp(340px, 54vh, 620px);
@@ -106,6 +108,7 @@ svg { width: 20px; height: 20px; stroke-width: 2; }
   background: color-mix(in srgb, var(--rvm-surface-2) 75%, #7d91a8 25%);
   touch-action: pan-y;
 }
+.map-shell.zone-mode { touch-action: none; }
 
 .map-transform { width: 100% !important; height: 100% !important; }
 .map-content { width: 100% !important; height: 100% !important; display: flex; align-items: center; justify-content: center; }
@@ -113,6 +116,9 @@ svg { width: 20px; height: 20px; stroke-width: 2; }
 .map-image-wrap > img { display: block; width: 100%; height: 100%; object-fit: fill; user-select: none; }
 
 .room-overlay { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.room-overlay.drawing-zone { cursor: crosshair; touch-action: none; }
+.room-overlay.drawing-zone .room { pointer-events: none; }
+.room-overlay.drawing-zone .room-label { opacity: 0.42; }
 .room-hitbox {
   fill: transparent;
   stroke: rgba(255, 255, 255, 0.55);
@@ -131,6 +137,25 @@ svg { width: 20px; height: 20px; stroke-width: 2; }
 .room-label foreignObject { color: var(--rvm-accent); }
 .room-label ha-icon { display: block; width: 22px; height: 22px; }
 .room.unmapped .room-label { opacity: 0.55; }
+
+.zone-rectangle {
+  fill: color-mix(in srgb, var(--rvm-accent) 28%, transparent);
+  stroke: var(--rvm-accent);
+  stroke-width: 3;
+  stroke-dasharray: 10 6;
+  vector-effect: non-scaling-stroke;
+  cursor: move;
+}
+.zone-selection.launched .zone-rectangle { fill: color-mix(in srgb, #35a854 28%, transparent); stroke: #35a854; }
+.zone-handle {
+  fill: var(--rvm-surface);
+  stroke: var(--rvm-accent);
+  stroke-width: 4;
+  vector-effect: non-scaling-stroke;
+}
+.zone-handle[data-zone-handle='nw'], .zone-handle[data-zone-handle='se'] { cursor: nwse-resize; }
+.zone-handle[data-zone-handle='ne'], .zone-handle[data-zone-handle='sw'] { cursor: nesw-resize; }
+.zone-selection.launched .zone-handle { stroke: #35a854; }
 
 .map-controls {
   position: absolute;
@@ -211,6 +236,7 @@ svg { width: 20px; height: 20px; stroke-width: 2; }
   gap: 10px;
   padding: 8px 20px 14px;
 }
+.primary-actions > :only-child { grid-column: 1 / -1; }
 
 button.primary, button.secondary, .primary-actions button {
   display: inline-flex;

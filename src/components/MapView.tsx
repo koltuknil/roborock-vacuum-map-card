@@ -1,10 +1,20 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Lock, LockOpen, RotateCcw, ZoomIn, ZoomOut } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { Eraser, Lock, LockOpen, RotateCcw, ZoomIn, ZoomOut } from 'lucide-react';
 import { TransformComponent, TransformWrapper, useControls } from 'react-zoom-pan-pinch';
-import { createRoomPath, configuredRoomMap, parseCalibrationPoints, parseRooms, roomCenter } from '../map';
+import { clampMapZone, createRoomPath, configuredRoomMap, normalizeMapZone, parseCalibrationPoints, parseRooms, roomCenter } from '../map';
 import { t } from '../i18n';
-import type { FloorConfig, HomeAssistant, Language } from '../types';
+import type { FloorConfig, HomeAssistant, Language, MapZone, SelectionMode } from '../types';
 import { HaIcon } from './HaIcon';
+
+const MIN_ZONE_SIZE = 24;
+type ZoneHandle = 'nw' | 'ne' | 'se' | 'sw';
+type ZoneDrag = {
+  pointerId: number;
+  kind: 'create' | 'move' | 'resize';
+  origin: { x: number; y: number };
+  initial?: MapZone;
+  handle?: ZoneHandle;
+};
 
 interface MapViewProps {
   hass: HomeAssistant;
@@ -14,34 +24,80 @@ interface MapViewProps {
   launched: Set<number>;
   active?: boolean;
   disabled?: boolean;
+  selectionMode: SelectionMode;
+  zone?: MapZone;
+  zoneLaunched?: boolean;
   onToggle: (segmentId: number) => void;
+  onZoneChange: (zone?: MapZone) => void;
 }
 
-function Controls({ locked, onToggleLock }: { locked: boolean; onToggleLock: () => void }) {
+function Controls({ locked, zoneMode, hasZone, disabled, clearZoneLabel, onToggleLock, onClearZone }: {
+  locked: boolean;
+  zoneMode: boolean;
+  hasZone: boolean;
+  disabled?: boolean;
+  clearZoneLabel?: string;
+  onToggleLock: () => void;
+  onClearZone: () => void;
+}) {
   const { zoomIn, zoomOut, resetTransform } = useControls();
   return (
     <div className="map-controls">
-      <button type="button" aria-label="Zoom in" onClick={() => zoomIn()} disabled={locked}><ZoomIn /></button>
-      <button type="button" aria-label="Zoom out" onClick={() => zoomOut()} disabled={locked}><ZoomOut /></button>
+      <button type="button" aria-label="Zoom in" onClick={() => zoomIn()} disabled={locked || zoneMode}><ZoomIn /></button>
+      <button type="button" aria-label="Zoom out" onClick={() => zoomOut()} disabled={locked || zoneMode}><ZoomOut /></button>
       <button type="button" aria-label="Reset zoom" onClick={() => resetTransform()}><RotateCcw /></button>
-      <button type="button" aria-label={locked ? 'Unlock map' : 'Lock map'} onClick={onToggleLock}>
-        {locked ? <Lock /> : <LockOpen />}
-      </button>
+      {zoneMode ? (
+        <button type="button" aria-label={clearZoneLabel} onClick={onClearZone} disabled={!hasZone || disabled}><Eraser /></button>
+      ) : (
+        <button type="button" aria-label={locked ? 'Unlock map' : 'Lock map'} onClick={onToggleLock}>
+          {locked ? <Lock /> : <LockOpen />}
+        </button>
+      )}
     </div>
   );
 }
 
-export function MapView({ hass, floor, language, selected, launched, active, disabled, onToggle }: MapViewProps) {
+function defaultZoneAt(point: { x: number; y: number }, width: number, height: number): MapZone {
+  const size = Math.min(Math.min(width, height), Math.max(MIN_ZONE_SIZE, Math.min(width, height) * 0.22));
+  return clampMapZone({
+    x1: point.x - size / 2,
+    y1: point.y - size / 2,
+    x2: point.x + size / 2,
+    y2: point.y + size / 2,
+  }, width, height);
+}
+
+export function MapView({
+  hass,
+  floor,
+  language,
+  selected,
+  launched,
+  active,
+  disabled,
+  selectionMode,
+  zone,
+  zoneLaunched,
+  onToggle,
+  onZoneChange,
+}: MapViewProps) {
   const [locked, setLocked] = useState(true);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   const [containerDimensions, setContainerDimensions] = useState({ width: 0, height: 0 });
   const [refreshTick, setRefreshTick] = useState(0);
   const shellRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef<ZoneDrag | undefined>(undefined);
+  const zoneRef = useRef(zone);
   const entity = hass.states[floor.map_entity];
   const rooms = useMemo(() => parseRooms(entity), [entity]);
   const calibration = useMemo(() => parseCalibrationPoints(entity), [entity]);
   const configured = useMemo(() => configuredRoomMap(floor), [floor]);
   const imagePath = typeof entity?.attributes.entity_picture === 'string' ? entity.attributes.entity_picture : undefined;
+  const normalizedZone = zone ? normalizeMapZone(zone) : undefined;
+
+  useEffect(() => {
+    zoneRef.current = zone;
+  }, [zone]);
 
   useEffect(() => {
     if (!active) return;
@@ -63,25 +119,33 @@ export function MapView({ hass, floor, language, selected, launched, active, dis
   if (!entity || entity.state === 'unavailable') error = t(language, 'mapMissing');
   else if (!imagePath) error = t(language, 'imageMissing');
   else if (calibration.length < 3) error = t(language, 'calibrationMissing');
-  else if (rooms.length === 0) error = t(language, 'roomsMissing');
+  else if (selectionMode === 'rooms' && rooms.length === 0) error = t(language, 'roomsMissing');
 
   if (error) {
     return <div className="map-error" role="alert">{error}</div>;
   }
 
   return (
-    <div className="map-shell" ref={shellRef}>
+    <div className={`map-shell ${selectionMode === 'zone' ? 'zone-mode' : ''}`} ref={shellRef}>
       <TransformWrapper
         initialScale={1}
         minScale={0.75}
         maxScale={4}
         centerOnInit
-        wheel={{ disabled: locked, step: 0.08 }}
-        pinch={{ disabled: locked }}
-        panning={{ disabled: locked, excluded: ['room-hitbox'] }}
+        wheel={{ disabled: locked || selectionMode === 'zone', step: 0.08 }}
+        pinch={{ disabled: locked || selectionMode === 'zone' }}
+        panning={{ disabled: locked || selectionMode === 'zone', excluded: ['room-hitbox'] }}
         doubleClick={{ disabled: true }}
       >
-        <Controls locked={locked} onToggleLock={() => setLocked((value) => !value)} />
+        <Controls
+          locked={locked}
+          zoneMode={selectionMode === 'zone'}
+          hasZone={Boolean(zone)}
+          disabled={disabled}
+          clearZoneLabel={t(language, 'clearZone')}
+          onToggleLock={() => setLocked((value) => !value)}
+          onClearZone={() => onZoneChange(undefined)}
+        />
         <TransformComponent wrapperClass="map-transform" contentClass="map-content">
           <div
             className="map-image-wrap"
@@ -104,10 +168,82 @@ export function MapView({ hass, floor, language, selected, launched, active, dis
               onLoad={(event) => setDimensions({ width: event.currentTarget.naturalWidth, height: event.currentTarget.naturalHeight })}
             />
             {dimensions.width > 0 && dimensions.height > 0 && <svg
-              className="room-overlay"
+              className={`room-overlay ${selectionMode === 'zone' ? 'drawing-zone' : ''}`}
               viewBox={`0 0 ${dimensions.width} ${dimensions.height}`}
               preserveAspectRatio="xMidYMid meet"
-              aria-label={`${floor.name} rooms`}
+              aria-label={selectionMode === 'zone' ? `${floor.name} zone map` : `${floor.name} rooms`}
+              onPointerDown={(event: ReactPointerEvent<SVGSVGElement>) => {
+                if (selectionMode !== 'zone' || disabled) return;
+                const rect = event.currentTarget.getBoundingClientRect();
+                if (!rect.width || !rect.height) return;
+                const point = {
+                  x: Math.min(dimensions.width, Math.max(0, ((event.clientX - rect.left) / rect.width) * dimensions.width)),
+                  y: Math.min(dimensions.height, Math.max(0, ((event.clientY - rect.top) / rect.height) * dimensions.height)),
+                };
+                const target = event.target as SVGElement;
+                const handle = target.dataset.zoneHandle as ZoneHandle | undefined;
+                const kind = handle ? 'resize' : target.dataset.zoneMove === 'true' && zone ? 'move' : 'create';
+                dragRef.current = { pointerId: event.pointerId, kind, origin: point, initial: zone, handle };
+                event.currentTarget.setPointerCapture?.(event.pointerId);
+                if (kind === 'create') {
+                  const next = { x1: point.x, y1: point.y, x2: point.x, y2: point.y };
+                  zoneRef.current = next;
+                  onZoneChange(next);
+                }
+                event.preventDefault();
+              }}
+              onPointerMove={(event: ReactPointerEvent<SVGSVGElement>) => {
+                const drag = dragRef.current;
+                if (!drag || drag.pointerId !== event.pointerId || disabled) return;
+                const rect = event.currentTarget.getBoundingClientRect();
+                if (!rect.width || !rect.height) return;
+                const point = {
+                  x: Math.min(dimensions.width, Math.max(0, ((event.clientX - rect.left) / rect.width) * dimensions.width)),
+                  y: Math.min(dimensions.height, Math.max(0, ((event.clientY - rect.top) / rect.height) * dimensions.height)),
+                };
+                let next: MapZone;
+                if (drag.kind === 'create') {
+                  next = normalizeMapZone({ x1: drag.origin.x, y1: drag.origin.y, x2: point.x, y2: point.y });
+                } else if (drag.kind === 'move' && drag.initial) {
+                  const dx = point.x - drag.origin.x;
+                  const dy = point.y - drag.origin.y;
+                  next = clampMapZone({
+                    x1: drag.initial.x1 + dx,
+                    y1: drag.initial.y1 + dy,
+                    x2: drag.initial.x2 + dx,
+                    y2: drag.initial.y2 + dy,
+                  }, dimensions.width, dimensions.height);
+                } else if (drag.initial && drag.handle) {
+                  next = { ...drag.initial };
+                  if (drag.handle.includes('w')) next.x1 = point.x;
+                  if (drag.handle.includes('e')) next.x2 = point.x;
+                  if (drag.handle.includes('n')) next.y1 = point.y;
+                  if (drag.handle.includes('s')) next.y2 = point.y;
+                  next = clampMapZone(next, dimensions.width, dimensions.height);
+                } else return;
+                zoneRef.current = next;
+                onZoneChange(next);
+                event.preventDefault();
+              }}
+              onPointerUp={(event: ReactPointerEvent<SVGSVGElement>) => {
+                const drag = dragRef.current;
+                if (!drag || drag.pointerId !== event.pointerId) return;
+                const current = zoneRef.current && normalizeMapZone(zoneRef.current);
+                if (drag.kind === 'create' && current && (
+                  current.x2 - current.x1 < MIN_ZONE_SIZE || current.y2 - current.y1 < MIN_ZONE_SIZE
+                )) {
+                  const next = defaultZoneAt(drag.origin, dimensions.width, dimensions.height);
+                  zoneRef.current = next;
+                  onZoneChange(next);
+                }
+                dragRef.current = undefined;
+                event.currentTarget.releasePointerCapture?.(event.pointerId);
+                event.preventDefault();
+              }}
+              onPointerCancel={(event: ReactPointerEvent<SVGSVGElement>) => {
+                dragRef.current = undefined;
+                event.currentTarget.releasePointerCapture?.(event.pointerId);
+              }}
             >
               {rooms.map((room) => {
                 const config = configured.get(room.segment_id);
@@ -116,7 +252,7 @@ export function MapView({ hass, floor, language, selected, launched, active, dis
                 const isLaunched = launched.has(room.segment_id);
                 const center = roomCenter(room, calibration);
                 const label = config?.name || room.source_name;
-                const roomDisabled = disabled || !mapped;
+                const roomDisabled = disabled || selectionMode === 'zone' || !mapped;
                 return (
                   <g key={room.segment_id} className={`room ${isSelected ? 'selected' : ''} ${isLaunched ? 'launched' : ''} ${!mapped ? 'unmapped' : ''}`}>
                     <path
@@ -147,6 +283,36 @@ export function MapView({ hass, floor, language, selected, launched, active, dis
                   </g>
                 );
               })}
+              {selectionMode === 'zone' && normalizedZone && (
+                <g className={`zone-selection ${zoneLaunched ? 'launched' : ''}`}>
+                  <rect
+                    className="zone-rectangle"
+                    data-zone-move="true"
+                    x={normalizedZone.x1}
+                    y={normalizedZone.y1}
+                    width={normalizedZone.x2 - normalizedZone.x1}
+                    height={normalizedZone.y2 - normalizedZone.y1}
+                    role="img"
+                    aria-label={t(language, 'selectedZone')}
+                  />
+                  {([
+                    ['nw', normalizedZone.x1, normalizedZone.y1],
+                    ['ne', normalizedZone.x2, normalizedZone.y1],
+                    ['se', normalizedZone.x2, normalizedZone.y2],
+                    ['sw', normalizedZone.x1, normalizedZone.y2],
+                  ] as Array<[ZoneHandle, number, number]>).map(([handle, cx, cy]) => (
+                    <circle
+                      className="zone-handle"
+                      data-zone-handle={handle}
+                      key={handle}
+                      cx={cx}
+                      cy={cy}
+                      r="12"
+                      aria-label={`${t(language, 'resizeZone')} ${handle}`}
+                    />
+                  ))}
+                </g>
+              )}
             </svg>}
           </div>
         </TransformComponent>

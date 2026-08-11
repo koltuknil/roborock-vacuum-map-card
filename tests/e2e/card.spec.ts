@@ -8,6 +8,31 @@ test('selects multiple rooms and opens the job sheet', async ({ page }) => {
   await expect(page.getByRole('dialog')).toContainText('Kitchen · Hallway');
 });
 
+test('draws and starts a native Roborock zone with only Vacuum and Vac & Mop modes', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('tab', { name: 'Zone' }).click();
+  const overlay = page.locator('svg.room-overlay');
+  const box = await overlay.boundingBox();
+  expect(box).not.toBeNull();
+  await page.mouse.move(box!.x + box!.width * 0.42, box!.y + box!.height * 0.32);
+  await page.mouse.down();
+  await page.mouse.move(box!.x + box!.width * 0.7, box!.y + box!.height * 0.64, { steps: 8 });
+  await page.mouse.up();
+  await expect(page.locator('.zone-rectangle')).toBeVisible();
+  await page.getByRole('button', { name: 'Configure job' }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByRole('tab', { name: 'Vacuum only' })).toBeVisible();
+  await expect(dialog.getByRole('tab', { name: 'Vac & Mop' })).toBeVisible();
+  await expect(dialog.getByRole('tab', { name: 'AI SmartPlan' })).toHaveCount(0);
+  await expect(dialog.getByRole('tab', { name: 'Vac followed by Mop' })).toHaveCount(0);
+  await dialog.getByRole('button', { name: 'Start', exact: true }).click();
+  await expect.poll(() => page.evaluate(() => window.__serviceCalls.some(
+    (call) => call.domain === 'roborock' && call.service === 'set_vacuum_zoned_cleaning',
+  ))).toBe(true);
+  const calls = await page.evaluate(() => window.__serviceCalls);
+  expect(calls.some((call) => call.data?.command === 'set_clean_repeat_times')).toBe(false);
+});
+
 test('mirrors the Roborock General modes and contextual controls', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'Kitchen' }).click();

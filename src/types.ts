@@ -2,6 +2,7 @@ export type Language = 'en' | 'nl';
 export type CleaningStrategy = 'custom' | 'smartplan';
 export type CleaningType = 'vacuum' | 'vacuum_and_mop' | 'vacuum_then_mop';
 export type CleaningCount = 1 | 2;
+export type SelectionMode = 'rooms' | 'zone';
 export type DockSettingKey =
   | 'mop_wash_frequency'
   | 'wash_mode'
@@ -186,12 +187,28 @@ export interface JobExecutionState {
   phase: JobExecutionPhase;
   floor_id?: string;
   segment_ids?: number[];
+  selection_mode?: SelectionMode;
+  zone?: MapZone;
   error?: string;
 }
 
 export interface CalibrationPoint {
   vacuum: { x: number; y: number };
   map: { x: number; y: number };
+}
+
+export interface MapZone {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+}
+
+export interface VacuumZone {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
 }
 
 export interface DiscoveredRoom {

@@ -6,8 +6,9 @@ A Roborock-native Home Assistant Dashboard card for selecting multiple rooms and
 
 ## Features
 
-- Calibrated Roborock maps with zoom, pan, accessible SVG room overlays, and room labels
+- Calibrated Roborock maps with zoom, pan, accessible SVG room overlays, room labels, and draggable zone cleaning
 - Multiple room selection followed by an explicit **Configure job** step
+- Free-drawn rectangular zones with drag-to-move and corner resizing for Vacuum and Vac & Mop jobs
 - Configurable **Entire floor** membership, including excluded-but-individually-selectable rooms
 - Roborock-style SmartPlan, Vac followed by Mop, Vac & Mop, and Vacuum mode tabs
 - App-facing suction, water-flow, cleaning-count, and route controls; internal Roborock modes are filtered out
@@ -205,10 +206,12 @@ Start validates every requested option against live entity options. It then:
 1. Selects and confirms the target floor when necessary.
 2. Applies the Home Assistant 2026.8+ high-level `cleaning_mode` for Vacuum or Vac & Mop when configured. On HA 2026.7 and older, the explicit fallback uses one atomic `set_clean_motor_mode` command for Vacuum mode.
 3. Applies only the app-supported manual route, water-flow, and suction values selected in the sheet.
-4. Sets the robot's native cleaning count with `set_clean_repeat_times` using the device-required `{ repeat: 1|2 }` object.
+4. For room and floor jobs, sets the robot's native cleaning count with `set_clean_repeat_times` using the device-required `{ repeat: 1|2 }` object. Zone jobs pass the count directly to the zoned-cleaning action.
 5. Starts one native whole-map job with `vacuum.start` when every configured
    room is selected. Partial or exclusion-based jobs use one
    `vacuum.clean_area` call with the selected HA area IDs.
+
+Zone mode uses the same validated cleaning-profile sequence, converts the drawn rectangle through the configured `calibration_points`, and calls the official `roborock.set_vacuum_zoned_cleaning` action with normalized `x1`, `y1`, `x2`, `y2`, and repeat count. Zone jobs intentionally expose only Vacuum and Vac & Mop; SmartPlan, Vac followed by Mop, and assisted-carry floors remain room/floor workflows.
 
 Vac followed by Mop presses the active floor's `floor.vacuum_then_mop_routine`. It is always treated as a whole-floor job, and the card deliberately hides suction, water flow, cleaning count, and route because those settings belong to the saved Roborock routine. If a floor has no native routine configured, the older `entities.vacuum_then_mop_script` two-phase orchestration remains available as a compatibility fallback.
 

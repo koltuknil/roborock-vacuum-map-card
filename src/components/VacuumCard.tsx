@@ -17,6 +17,7 @@ import { detectCapabilities, isVacuumActive } from '../capabilities';
 import { DockExecutionError, executeDockAction, executeDockSetting } from '../dock-executor';
 import { executeJob, JobExecutionError } from '../executor';
 import { t } from '../i18n';
+import { mapZoneToVacuumZone, parseCalibrationPoints } from '../map';
 import { draftFromPreset, getAvailablePresets } from '../presets';
 import type {
   FloorConfig,
@@ -25,7 +26,9 @@ import type {
   HomeAssistant,
   JobDraft,
   JobExecutionState,
+  MapZone,
   RoborockVacuumMapCardConfig,
+  SelectionMode,
 } from '../types';
 import { DockSheet } from './DockSheet';
 import { JobSheet } from './JobSheet';
@@ -99,7 +102,9 @@ export function VacuumCard({ hass, config }: VacuumCardProps) {
   const language = config.language;
   const [floorId, setFloorId] = useState(() => initialFloor(config, hass).id);
   const floor = config.floors.find((item) => item.id === floorId) ?? config.floors[0];
+  const [selectionMode, setSelectionMode] = useState<SelectionMode>('rooms');
   const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [zone, setZone] = useState<MapZone>();
   const [sheetOpen, setSheetOpen] = useState(false);
   const [assistedConfiguring, setAssistedConfiguring] = useState(false);
   const [assistedPending, setAssistedPending] = useState(false);
@@ -135,6 +140,8 @@ export function VacuumCard({ hass, config }: VacuumCardProps) {
     // The helpers are the durable workflow source of truth after a reload.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setFloorId(carryFloor.id);
+    setSelectionMode('rooms');
+    setZone(undefined);
     setSelected(new Set(carryJob.segment_ids));
     setDraft({
       preset_id: 'assisted_carry',
@@ -154,6 +161,8 @@ export function VacuumCard({ hass, config }: VacuumCardProps) {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setFloorId(selectedFloor.id);
     setSelected(new Set());
+    setZone(undefined);
+    if (selectedFloor.assisted_carry) setSelectionMode('rooms');
     setSheetOpen(false);
   }, [assistedActive, config.floors, selectedMap]);
 
@@ -161,6 +170,7 @@ export function VacuumCard({ hass, config }: VacuumCardProps) {
   const washing = ['washing_the_mop', 'washing_the_mop_2'].includes(detailedStatus ?? '');
   const emptying = [vacuum?.state, detailedStatus].includes('emptying_the_bin');
   const jobActive = isVacuumActive(vacuum?.state) || washing;
+  const selectionBusy = assistedActive || ['submitting', 'starting', 'active'].includes(execution.phase);
 
   useEffect(() => {
     if (execution.phase === 'starting' && jobActive) {
@@ -170,6 +180,7 @@ export function VacuumCard({ hass, config }: VacuumCardProps) {
     } else if (execution.phase === 'active' && !jobActive) {
       setExecution({ phase: 'idle' });
       setSelected(new Set());
+      setZone(undefined);
     }
   }, [execution.phase, jobActive]);
 
@@ -209,8 +220,19 @@ export function VacuumCard({ hass, config }: VacuumCardProps) {
 
   const switchFloor = (nextFloorId: string) => {
     if (assistedActive) return;
+    const nextFloor = config.floors.find((item) => item.id === nextFloorId);
     setFloorId(nextFloorId);
     setSelected(new Set());
+    setZone(undefined);
+    if (nextFloor?.assisted_carry) setSelectionMode('rooms');
+    setSheetOpen(false);
+  };
+
+  const switchSelectionMode = (nextMode: SelectionMode) => {
+    if (nextMode === 'zone' && floor.assisted_carry) return;
+    setSelectionMode(nextMode);
+    setSelected(new Set());
+    setZone(undefined);
     setSheetOpen(false);
   };
 
@@ -224,6 +246,20 @@ export function VacuumCard({ hass, config }: VacuumCardProps) {
         return;
       }
       setDraft(draftFromPreset(assistedPreset));
+    }
+    if (selectionMode === 'zone' && (
+      draft.strategy !== 'custom' || !['vacuum', 'vacuum_and_mop'].includes(draft.cleaning_type)
+    )) {
+      const zonePreset = presets.find(({ preset, available }) => preset.id === 'vacuum_only' && available)?.preset
+        ?? presets.find(({ preset, available }) => preset.id === 'vacuum_and_mop' && available)?.preset
+        ?? presets.find(({ preset, available }) => available
+          && preset.strategy === 'custom'
+          && ['vacuum', 'vacuum_and_mop'].includes(preset.cleaning_type ?? 'vacuum'))?.preset;
+      if (!zonePreset) {
+        setToast(t(language, 'unsupported'));
+        return;
+      }
+      setDraft(draftFromPreset(zonePreset));
     }
     if (!assisted && draft.cleaning_type === 'vacuum_then_mop' && floor.vacuum_then_mop_routine) {
       const included = floor.rooms
@@ -348,15 +384,31 @@ export function VacuumCard({ hass, config }: VacuumCardProps) {
     }
     if (submittingRef.current) return;
     submittingRef.current = true;
-    setExecution({ phase: 'submitting', floor_id: floor.id, segment_ids: [...selected] });
+    const executionSelection = {
+      floor_id: floor.id,
+      segment_ids: selectionMode === 'rooms' ? [...selected] : undefined,
+      selection_mode: selectionMode,
+      zone: selectionMode === 'zone' ? zone : undefined,
+    };
+    setExecution({ phase: 'submitting', ...executionSelection });
     try {
-      await executeJob({ getHass: () => hassRef.current, config, floor, rooms: selectedRooms, draft });
-      setExecution({ phase: 'starting', floor_id: floor.id, segment_ids: [...selected] });
+      const vacuumZone = selectionMode === 'zone' && zone
+        ? mapZoneToVacuumZone(zone, parseCalibrationPoints(hassRef.current.states[floor.map_entity]))
+        : undefined;
+      await executeJob({
+        getHass: () => hassRef.current,
+        config,
+        floor,
+        rooms: selectionMode === 'rooms' ? selectedRooms : [],
+        draft,
+        zone: vacuumZone,
+      });
+      setExecution({ phase: 'starting', ...executionSelection });
       setSheetOpen(false);
       setToast(t(language, 'launched'));
     } catch (error) {
       const message = error instanceof JobExecutionError ? `${error.operation}: ${error.message}` : String(error);
-      setExecution({ phase: 'failed', floor_id: floor.id, segment_ids: [...selected], error: message });
+      setExecution({ phase: 'failed', ...executionSelection, error: message });
       setToast(message);
     } finally {
       submittingRef.current = false;
@@ -478,6 +530,31 @@ export function VacuumCard({ hass, config }: VacuumCardProps) {
         </div>
       )}
 
+      {!floor.assisted_carry && (
+        <div className="selection-mode-tabs" role="tablist" aria-label={t(language, 'selectionMode')}>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={selectionMode === 'rooms'}
+            className={selectionMode === 'rooms' ? 'active' : ''}
+            disabled={selectionBusy}
+            onClick={() => switchSelectionMode('rooms')}
+          >
+            {t(language, 'rooms')}
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={selectionMode === 'zone'}
+            className={selectionMode === 'zone' ? 'active' : ''}
+            disabled={selectionBusy}
+            onClick={() => switchSelectionMode('zone')}
+          >
+            {t(language, 'zone')}
+          </button>
+        </div>
+      )}
+
       <MapView
         hass={hass}
         floor={floor}
@@ -485,7 +562,10 @@ export function VacuumCard({ hass, config }: VacuumCardProps) {
         selected={selected}
         launched={launched}
         active={jobActive}
-        disabled={assistedActive || execution.phase === 'submitting' || execution.phase === 'starting' || execution.phase === 'active'}
+        disabled={selectionBusy}
+        selectionMode={selectionMode}
+        zone={zone}
+        zoneLaunched={execution.floor_id === floor.id && execution.selection_mode === 'zone' && ['starting', 'active'].includes(execution.phase)}
         onToggle={(segmentId) =>
           setSelected((current) => {
             const next = new Set(current);
@@ -494,6 +574,7 @@ export function VacuumCard({ hass, config }: VacuumCardProps) {
             return next;
           })
         }
+        onZoneChange={setZone}
       />
 
       {floor.assisted_carry && (
@@ -511,17 +592,24 @@ export function VacuumCard({ hass, config }: VacuumCardProps) {
 
       <div className="selection-row">
         <div>
-          <strong>{t(language, 'selectedRooms')}</strong>
-          <span>{selectedNames.length ? selectedNames.join(' · ') : t(language, 'noRoomsSelected')}</span>
+          <strong>{selectionMode === 'zone' ? t(language, 'selectedZone') : t(language, 'selectedRooms')}</strong>
+          <span>{selectionMode === 'zone'
+            ? zone ? t(language, 'zoneReady') : t(language, 'noZoneSelected')
+            : selectedNames.length ? selectedNames.join(' · ') : t(language, 'noRoomsSelected')}</span>
         </div>
-        <span className="selection-count">{selected.size}</span>
+        <span className="selection-count">{selectionMode === 'zone' ? Number(Boolean(zone)) : selected.size}</span>
       </div>
 
       {!assistedActive && <div className="primary-actions">
-        <button type="button" className="secondary" onClick={selectEntireFloor} disabled={execution.phase === 'submitting'}>
+        {selectionMode === 'rooms' && <button type="button" className="secondary" onClick={selectEntireFloor} disabled={selectionBusy}>
           <Home /> {t(language, 'entireFloor')}
-        </button>
-        <button type="button" className="primary" onClick={() => openJobSheet(Boolean(floor.assisted_carry))} disabled={selected.size === 0 || execution.phase === 'submitting'}>
+        </button>}
+        <button
+          type="button"
+          className="primary"
+          onClick={() => openJobSheet(Boolean(floor.assisted_carry))}
+          disabled={(selectionMode === 'zone' ? !zone : selected.size === 0) || selectionBusy}
+        >
           {floor.assisted_carry && <Sparkles />}{floor.assisted_carry ? t(language, 'prepareUpstairs') : t(language, 'configureJob')}
         </button>
       </div>}
@@ -548,9 +636,10 @@ export function VacuumCard({ hass, config }: VacuumCardProps) {
           draft={draft}
           capabilities={capabilities}
           presets={presets}
-          selectedRoomNames={selectedNames}
+          selectedRoomNames={selectionMode === 'zone' ? [t(language, 'customZone')] : selectedNames}
           submitting={execution.phase === 'submitting' || assistedPending}
           assistedCarry={assistedConfiguring}
+          zoneCleaning={selectionMode === 'zone'}
           onDraftChange={changeDraft}
           onClose={() => execution.phase !== 'submitting' && !assistedPending && setSheetOpen(false)}
           onStart={submit}

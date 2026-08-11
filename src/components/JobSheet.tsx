@@ -13,6 +13,7 @@ interface JobSheetProps {
   selectedRoomNames: string[];
   submitting: boolean;
   assistedCarry?: boolean;
+  zoneCleaning?: boolean;
   onDraftChange: (draft: JobDraft) => void;
   onClose: () => void;
   onStart: () => void;
@@ -76,14 +77,22 @@ export function JobSheet({
   selectedRoomNames,
   submitting,
   assistedCarry = false,
+  zoneCleaning = false,
   onDraftChange,
   onClose,
   onStart,
 }: JobSheetProps) {
-  const appModes = MODE_IDS.map((id) => presets.find(({ preset }) => preset.id === id)).filter(
+  const modeIds = zoneCleaning ? ['vacuum_only', 'vacuum_and_mop'] as const : MODE_IDS;
+  const appModes = modeIds.map((id) => presets.find(({ preset }) => preset.id === id)).filter(
     (mode): mode is AvailablePreset => Boolean(mode),
   );
-  const savedPresets = presets.filter(({ preset }) => !MODE_IDS.includes(preset.id as typeof MODE_IDS[number]));
+  const savedPresets = presets.filter(({ preset }) =>
+    !MODE_IDS.includes(preset.id as typeof MODE_IDS[number])
+      && (!zoneCleaning || (
+        preset.strategy === 'custom'
+        && ['vacuum', 'vacuum_and_mop'].includes(preset.cleaning_type ?? 'vacuum')
+      )),
+  );
   const fanAllowList = draft.cleaning_type === 'vacuum' ? VACUUM_SUCTION : MOP_SUCTION;
   const fanSpeeds = fanAllowList.filter((option) => capabilities.fanSpeeds.includes(option));
   const routes = APP_ROUTES.filter((option) => capabilities.mopModes.includes(option));

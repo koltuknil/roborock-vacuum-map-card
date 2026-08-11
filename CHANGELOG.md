@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.0 — 2026-08-11
+
+- Add free-drawn, movable, and resizable rectangular zone cleaning on calibrated Roborock maps.
+- Apply validated Vacuum or Vac & Mop settings before calling Home Assistant's native `roborock.set_vacuum_zoned_cleaning` action.
+- Keep SmartPlan, Vac followed by Mop, and assisted-carry workflows out of Zone mode.
+
 ## 0.6.6 — 2026-08-10
 
 - Expose Vac followed by Mop on assisted isolated maps without a native Roborock routine by using the shared no-dock two-phase start script.

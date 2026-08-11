@@ -11,7 +11,44 @@ function loadMap() {
   fireEvent.load(image);
 }
 
+function drawZone(start = { x: 700, y: 200 }, end = { x: 900, y: 400 }) {
+  const overlay = document.querySelector('.room-overlay') as SVGSVGElement;
+  Object.defineProperty(overlay, 'getBoundingClientRect', {
+    configurable: true,
+    value: () => ({ x: 0, y: 0, left: 0, top: 0, right: 1200, bottom: 800, width: 1200, height: 800, toJSON: () => ({}) }),
+  });
+  fireEvent.pointerDown(overlay, { clientX: start.x, clientY: start.y, pointerId: 1 });
+  fireEvent.pointerMove(overlay, { clientX: end.x, clientY: end.y, pointerId: 1 });
+  fireEvent.pointerUp(overlay, { clientX: end.x, clientY: end.y, pointerId: 1 });
+}
+
 describe('vacuum card flows', () => {
+  it('draws a zone and offers only Vacuum and Vac & Mop before using the native action', async () => {
+    const hass = createHass();
+    const calls: Array<{ domain: string; service: string; data?: Record<string, unknown> }> = [];
+    hass.callService = vi.fn(async (domain, service, data, target) => {
+      calls.push({ domain, service, data });
+      if (domain === 'select') hass.states[String(target?.entity_id)].state = String(data?.option);
+    });
+    render(<VacuumCard hass={hass} config={configFixture} />);
+    loadMap();
+    await userEvent.click(screen.getByRole('tab', { name: 'Zone' }));
+    drawZone();
+    expect(screen.getByText('Drag to move or use the corners to resize')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Configure job' }));
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByRole('tab', { name: 'Vacuum only' })).toBeInTheDocument();
+    expect(within(dialog).getByRole('tab', { name: 'Vac & Mop' })).toBeInTheDocument();
+    expect(within(dialog).queryByRole('tab', { name: 'AI SmartPlan' })).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole('tab', { name: 'Vac followed by Mop' })).not.toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Start' }));
+    await waitFor(() => expect(calls).toContainEqual({
+      domain: 'roborock',
+      service: 'set_vacuum_zoned_cleaning',
+      data: { x1: 26750, y1: 24250, x2: 29250, y2: 26750, repeats: 1 },
+    }));
+  });
+
   it('selects multiple rooms and opens Configure job', async () => {
     render(<VacuumCard hass={createHass()} config={configFixture} />);
     loadMap();

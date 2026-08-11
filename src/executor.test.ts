@@ -3,6 +3,72 @@ import { executeJob } from './executor';
 import { configFixture, createHass } from './test/fixtures';
 
 describe('job executor', () => {
+  it('starts a Vacuum zone through the native Roborock action without a separate repeat command', async () => {
+    const hass = createHass();
+    const calls: Array<{ domain: string; service: string; data?: Record<string, unknown> }> = [];
+    hass.callService = vi.fn(async (domain, service, data, target) => {
+      calls.push({ domain, service, data });
+      if (domain === 'select') hass.states[String(target?.entity_id)].state = String(data?.option);
+    });
+    await executeJob({
+      getHass: () => hass,
+      config: configFixture,
+      floor: configFixture.floors[0],
+      rooms: [],
+      zone: { x1: 25000, y1: 21000, x2: 28000, y2: 24000 },
+      draft: { preset_id: 'vacuum_only', strategy: 'custom', cleaning_type: 'vacuum', fan_speed: 'balanced', cleaning_count: 2 },
+      pollMs: 0,
+    });
+    expect(calls).toEqual([
+      { domain: 'select', service: 'select_option', data: { option: 'vacuum' } },
+      { domain: 'vacuum', service: 'set_fan_speed', data: { fan_speed: 'balanced' } },
+      {
+        domain: 'roborock',
+        service: 'set_vacuum_zoned_cleaning',
+        data: { x1: 25000, y1: 21000, x2: 28000, y2: 24000, repeats: 2 },
+      },
+    ]);
+    expect(calls.some(({ data }) => data?.command === 'set_clean_repeat_times')).toBe(false);
+  });
+
+  it('applies Vac & Mop settings before starting a native Roborock zone', async () => {
+    const hass = createHass();
+    const calls: string[] = [];
+    hass.callService = vi.fn(async (domain, service, data, target) => {
+      calls.push(`${domain}.${service}:${String(data?.option ?? data?.fan_speed ?? data?.command ?? data?.x1)}`);
+      if (domain === 'select') hass.states[String(target?.entity_id)].state = String(data?.option);
+    });
+    await executeJob({
+      getHass: () => hass,
+      config: configFixture,
+      floor: configFixture.floors[0],
+      rooms: [],
+      zone: { x1: 25000, y1: 21000, x2: 28000, y2: 24000 },
+      draft: { preset_id: 'vacuum_and_mop', strategy: 'custom', cleaning_type: 'vacuum_and_mop', fan_speed: 'turbo', mop_mode: 'deep', mop_intensity: 'high', cleaning_count: 1 },
+      pollMs: 0,
+    });
+    expect(calls).toEqual([
+      'select.select_option:deep',
+      'select.select_option:high',
+      'vacuum.set_fan_speed:turbo',
+      'roborock.set_vacuum_zoned_cleaning:25000',
+    ]);
+  });
+
+  it('rejects unsupported zone modes before changing vacuum settings', async () => {
+    const hass = createHass();
+    hass.callService = vi.fn();
+    await expect(executeJob({
+      getHass: () => hass,
+      config: configFixture,
+      floor: configFixture.floors[0],
+      rooms: [],
+      zone: { x1: 25000, y1: 21000, x2: 28000, y2: 24000 },
+      draft: { preset_id: 'smartplan', strategy: 'smartplan', cleaning_type: 'vacuum_and_mop', cleaning_count: 1 },
+    })).rejects.toMatchObject({ operation: 'preflight' });
+    expect(hass.callService).not.toHaveBeenCalled();
+  });
+
   it('orders floor, safe SmartPlan exit, mop, fan and clean-area calls', async () => {
     const hass = createHass();
     hass.states['select.mop_mode'].state = 'smart_mode';

@@ -1,5 +1,5 @@
 import { isVacuumBusy } from './capabilities';
-import type { FloorConfig, HomeAssistant, JobDraft, RoborockVacuumMapCardConfig, RoomConfig } from './types';
+import type { FloorConfig, HomeAssistant, JobDraft, RoborockVacuumMapCardConfig, RoomConfig, VacuumZone } from './types';
 
 const SAFE_SMARTPLAN_EXIT_MODES = new Set(['standard', 'deep', 'deep_plus', 'fast']);
 
@@ -20,6 +20,7 @@ interface ExecuteJobOptions {
   floor: FloorConfig;
   rooms: RoomConfig[];
   draft: JobDraft;
+  zone?: VacuumZone;
   timeoutMs?: number;
   pollMs?: number;
   sleep?: (milliseconds: number) => Promise<void>;
@@ -133,6 +134,7 @@ export async function executeJob({
   floor,
   rooms,
   draft,
+  zone,
   timeoutMs = 10_000,
   pollMs = 150,
   sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)),
@@ -146,7 +148,13 @@ export async function executeJob({
     throw new JobExecutionError('preflight', `Vacuum error: ${errorEntity.state}`);
   }
   const areaIds = [...new Set(rooms.map((room) => room.area_id).filter((value): value is string => Boolean(value)))];
-  if (areaIds.length === 0) throw new JobExecutionError('preflight', 'Select at least one room mapped to a Home Assistant area');
+  if (!zone && areaIds.length === 0) throw new JobExecutionError('preflight', 'Select at least one room mapped to a Home Assistant area');
+  if (zone && (draft.strategy !== 'custom' || !['vacuum', 'vacuum_and_mop'].includes(draft.cleaning_type))) {
+    throw new JobExecutionError('preflight', 'Zone cleaning supports only Vacuum and Vac & Mop');
+  }
+  if (zone && (![zone.x1, zone.y1, zone.x2, zone.y2].every(Number.isFinite) || zone.x2 <= zone.x1 || zone.y2 <= zone.y1)) {
+    throw new JobExecutionError('preflight', 'The selected zone is invalid');
+  }
 
   const mapSelect = config.entities?.map_select;
   const ensureFloorSelected = async (): Promise<void> => {
@@ -275,7 +283,7 @@ export async function executeJob({
       }
     }
 
-    await setRepeat(getHass(), config, draft.cleaning_count);
+    if (!zone) await setRepeat(getHass(), config, draft.cleaning_count);
   }
 
   // Roborock's map can change while cleaning settings are applied. In manual
@@ -288,7 +296,14 @@ export async function executeJob({
     && floor.rooms.every((room) => selectedRoomIds.has(room.segment_id));
 
   try {
-    if (entireFloorSelected) {
+    if (zone) {
+      await getHass().callService(
+        'roborock',
+        'set_vacuum_zoned_cleaning',
+        { ...zone, repeats: draft.cleaning_count },
+        { entity_id: config.entity },
+      );
+    } else if (entireFloorSelected) {
       await getHass().callService('vacuum', 'start', undefined, { entity_id: config.entity });
     } else {
       await getHass().callService(
@@ -299,7 +314,8 @@ export async function executeJob({
       );
     }
   } catch (error) {
-    throw new JobExecutionError(entireFloorSelected ? 'start_floor' : 'clean_area', error instanceof Error ? error.message : String(error), { cause: error });
+    const operation = zone ? 'clean_zone' : entireFloorSelected ? 'start_floor' : 'clean_area';
+    throw new JobExecutionError(operation, error instanceof Error ? error.message : String(error), { cause: error });
   }
   return areaIds;
 }
