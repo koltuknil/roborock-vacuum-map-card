@@ -66,7 +66,7 @@ function formatRemainingTime(hass: HomeAssistant, entityId: string | undefined, 
   const remainingMinutes = roundedMinutes % 60;
   const parts = [
     hours > 0 ? `${hours} ${language === 'nl' ? 'u' : language === 'tr' ? 'sa' : 'h'}` : undefined,
-    remainingMinutes > 0 || hours === 0 ? `${remainingMinutes} min` : undefined,
+    remainingMinutes > 0 || hours === 0 ? `${remainingMinutes} ${language === 'tr' ? 'dk' : 'min'}` : undefined,
   ].filter(Boolean);
   return `${parts.join(' ')} ${t(language, 'remaining')}`;
 }
@@ -83,7 +83,7 @@ function formatRelativeTime(isoString: string, language: 'en' | 'nl' | 'tr' | un
   if (diffMs < 0) return undefined;
   const diffMins = Math.floor(diffMs / 60000);
   if (diffMins < 1) return t(language, 'justNow');
-  if (diffMins < 60) return `${diffMins} min ${t(language, 'ago')}`;
+  if (diffMins < 60) return `${diffMins} ${language === 'tr' ? 'dk' : 'min'} ${t(language, 'ago')}`;
   const diffHours = Math.floor(diffMins / 60);
   if (diffHours < 24) return `${diffHours}${language === 'nl' ? ' u' : language === 'tr' ? ' sa' : 'h'} ${t(language, 'ago')}`;
   const diffDays = Math.floor(diffHours / 24);
